@@ -25,6 +25,11 @@ type Handler interface {
 	//handle COM_STMT_CLOSE, context is the previous one set in prepare
 	//this handler has no response
 	HandleStmtClose(context interface{}) error
+	// handler COM_BINLOG_DUMP
+	HandleDump(data []byte) error
+	HandleGetData() ([]byte, error)
+	// handler COM_REGISTER_SLAVE
+	HandleRegisterSlave(data []byte) error
 }
 
 func (c *Conn) HandleCommand() error {
@@ -39,19 +44,46 @@ func (c *Conn) HandleCommand() error {
 		return err
 	}
 
-	v := c.dispatch(data)
+	if data[0] == COM_BINLOG_DUMP {
+		err := c.h.HandleDump(data)
+		if err != nil {
+			c.Close()
+			c.Conn = nil
+			return err
+		}
+		for {
+			var v []byte
+			v, err := c.h.HandleGetData()
+			if err != nil {
+				c.Close()
+				c.Conn = nil
+				return err
+			}
+			err = c.writeValue(v)
+			if err != nil {
+				c.Close()
+				c.Conn = nil
+				return err
+			}
+		}
+	} else {
+		v := c.dispatch(data)
 
-	err = c.writeValue(v)
+		err = c.writeValue(v)
 
-	if c.Conn != nil {
-		c.ResetSequence()
+		if c.Conn != nil {
+			c.ResetSequence()
+		}
+
+		if err != nil {
+			c.Close()
+			c.Conn = nil
+			return err
+		}
+
 	}
 
-	if err != nil {
-		c.Close()
-		c.Conn = nil
-	}
-	return err
+	return nil
 }
 
 func (c *Conn) dispatch(data []byte) interface{} {
@@ -118,6 +150,9 @@ func (c *Conn) dispatch(data []byte) interface{} {
 		} else {
 			return r
 		}
+	case COM_REGISTER_SLAVE:
+		c.h.HandleRegisterSlave(data)
+		return nil
 	default:
 		msg := fmt.Sprintf("command %d is not supported now", cmd)
 		return NewError(ER_UNKNOWN_ERROR, msg)
@@ -147,5 +182,17 @@ func (h EmptyHandler) HandleStmtExecute(context interface{}, query string, args 
 }
 
 func (h EmptyHandler) HandleStmtClose(context interface{}) error {
+	return nil
+}
+
+func (h EmptyHandler) HandleDump(data []byte) error {
+	return nil
+}
+
+func (h EmptyHandler) HandleGetData() ([]byte, error) {
+	return nil, nil
+}
+
+func (h EmptyHandler) HandleRegisterSlave(data []byte) error {
 	return nil
 }

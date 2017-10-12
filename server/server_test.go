@@ -112,6 +112,10 @@ func (h *testHandler) HandleStmtClose(context interface{}) error {
 	return nil
 }
 
+func (h *testHandler) HandleDump(context interface{}) (*mysql.Result, error) {
+	return nil, nil
+}
+
 func (h *testHandler) HandleStmtExecute(ctx interface{}, query string, args []interface{}) (*mysql.Result, error) {
 	return h.handleQuery(query, true)
 }

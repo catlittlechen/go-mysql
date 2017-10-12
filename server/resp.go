@@ -28,6 +28,13 @@ func (c *Conn) writeOK(r *Result) error {
 	return c.WritePacket(data)
 }
 
+func (c *Conn) writeDump(data []byte) error {
+	result := make([]byte, len(data)+5)
+	result[4] = OK_HEADER
+	copy(result[5:], data)
+	return c.WritePacket(result)
+}
+
 func (c *Conn) writeError(e error) error {
 	var m *MyError
 	var ok bool
@@ -136,6 +143,8 @@ func (c *Conn) writeValue(value interface{}) error {
 		return c.writeFieldList(v)
 	case *Stmt:
 		return c.writePrepare(v)
+	case []byte:
+		return c.writeDump(value.([]byte))
 	default:
 		return fmt.Errorf("invalid response type %T", value)
 	}
